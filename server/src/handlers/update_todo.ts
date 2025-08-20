@@ -1,16 +1,47 @@
+import { db } from '../db';
+import { todosTable } from '../db/schema';
 import { type UpdateTodoInput, type Todo } from '../schema';
+import { eq } from 'drizzle-orm';
 
 export const updateTodo = async (input: UpdateTodoInput): Promise<Todo> => {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is updating an existing todo task in the database.
-    // It should update only the fields provided in the input and update the updated_at timestamp.
-    // Should throw an error if the todo with the given ID doesn't exist.
-    return Promise.resolve({
-        id: input.id,
-        title: input.title || "Placeholder Title", // Should fetch current value from DB
-        description: input.description !== undefined ? input.description : null,
-        completed: input.completed !== undefined ? input.completed : false,
-        created_at: new Date(), // Should fetch from database
-        updated_at: new Date() // Should be updated to current timestamp
-    } as Todo);
+  try {
+    // First, check if the todo exists
+    const existingTodo = await db.select()
+      .from(todosTable)
+      .where(eq(todosTable.id, input.id))
+      .execute();
+
+    if (existingTodo.length === 0) {
+      throw new Error(`Todo with id ${input.id} not found`);
+    }
+
+    // Build the update object with only provided fields
+    const updateData: Partial<typeof todosTable.$inferInsert> = {
+      updated_at: new Date() // Always update the timestamp
+    };
+
+    if (input.title !== undefined) {
+      updateData.title = input.title;
+    }
+
+    if (input.description !== undefined) {
+      updateData.description = input.description;
+    }
+
+    if (input.completed !== undefined) {
+      updateData.completed = input.completed;
+    }
+
+    // Update the todo and return the updated record
+    const result = await db.update(todosTable)
+      .set(updateData)
+      .where(eq(todosTable.id, input.id))
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Todo update failed:', error);
+    throw error;
+  }
 };
